@@ -114,6 +114,33 @@
             background-color: #ff4d4d;
             color: white;
         }
+
+        .task-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background-color: #e5e7eb;
+  color: #111827;
+  cursor: pointer;
+}
+
+.edit-btn:hover {
+  background-color: #d1d5db;
+}
+
+.edit-input {
+  flex: 1;
+  margin: 0 10px;
+  padding: 5px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 1rem;
+}
     </style>
 </head>
 <body>
@@ -133,113 +160,199 @@
         <ul id="taskList"></ul>
     </div>
 
-    <script>
-        const API_URL = "/api/tasks";
-        let allTasks = []; // Store tasks globally for filtering
-        let currentFilter = 'all'; // Track active tab ('all', 'active', 'completed')
+<!-- Your task input, Add Task button, and <ul id="taskList"></ul> -->
+        <ul id="taskList"></ul>
 
-        async function fetchTasks() {
-            try {
-                const res = await fetch(API_URL);
-                allTasks = await res.json();
-                applyCurrentFilter();
-            } catch (err) {
-                console.error('Failed to fetch tasks:', err);
-            }
-        }
+        <!-- Paste the full <script>...</script> block right here -->
+        <script>
+    const API_URL = "/api/tasks";
+    let allTasks = []; // Store tasks globally for filtering
+    let currentFilter = 'all'; // Track active tab ('all', 'active', 'completed')
 
-        function renderTasks(tasksToRender) {
-            const list = document.getElementById('taskList');
-            list.innerHTML = '';
-
-            tasksToRender.forEach(task => {
-                const isCompleted = task.status === 'Completed';
-                const li = document.createElement('li');
-                if (isCompleted) li.classList.add('completed');
-
-                li.innerHTML = `
-                    <label class="task-left">
-                        <input 
-                            type="checkbox" 
-                            ${isCompleted ? 'checked' : ''} 
-                            onchange="toggleTask(${task.id}, '${task.status || 'Pending'}')"
-                        >
-                        <span>${task.title}</span>
-                    </label>
-                    <button onclick="deleteTask(${task.id})">Delete</button>
-                `;
-                list.appendChild(li);
-            });
-        }
-
-        function applyCurrentFilter() {
-            if (currentFilter === 'active') {
-                renderTasks(allTasks.filter(t => t.status !== 'Completed'));
-            } else if (currentFilter === 'completed') {
-                renderTasks(allTasks.filter(t => t.status === 'Completed'));
-            } else {
-                renderTasks(allTasks);
-            }
-        }
-
-        function filterTasks(filter) {
-            currentFilter = filter;
-
-            // Highlight the active filter button
-            document.querySelectorAll('.filters button').forEach(btn => btn.classList.remove('active-filter'));
-            document.getElementById(`btn-${filter}`).classList.add('active-filter');
-
+    async function fetchTasks() {
+        try {
+            const res = await fetch(API_URL);
+            allTasks = await res.json();
             applyCurrentFilter();
+        } catch (err) {
+            console.error('Failed to fetch tasks:', err);
         }
+    }
 
-        async function addTask() {
-            const input = document.getElementById('taskTitle');
-            const title = input.value.trim();
-            if (!title) return;
+    function renderTasks(tasksToRender) {
+        const list = document.getElementById('taskList');
+        list.innerHTML = '';
 
-            try {
-                await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title })
-                });
-                input.value = '';
-                fetchTasks();
-            } catch (err) {
-                console.error('Failed to add task:', err);
+        tasksToRender.forEach(task => {
+            const isCompleted = task.status === 'Completed';
+            const li = document.createElement('li');
+            if (isCompleted) li.classList.add('completed');
+
+            li.innerHTML = `
+                <label class="task-left">
+                    <input 
+                        type="checkbox" 
+                        ${isCompleted ? 'checked' : ''} 
+                        onchange="toggleTask(${task.id}, '${task.status || 'Pending'}')"
+                    >
+                    <span class="task-title">${task.title}</span>
+                </label>
+                <div class="task-actions">
+                    <button type="button" class="edit-btn" onclick="startEditTask(${task.id}, this)">Edit</button>
+                    <button type="button" class="delete-btn" onclick="deleteTask(${task.id})">Delete</button>
+                </div>
+            `;
+            list.appendChild(li);
+        });
+    }
+
+    function startEditTask(id, editBtn) {
+        const li = editBtn.closest('li');
+        const label = li.querySelector('.task-left');
+        const titleSpan = li.querySelector('.task-title');
+        const actionsDiv = li.querySelector('.task-actions');
+        const deleteBtn = actionsDiv.querySelector('.delete-btn');
+        const oldTitle = titleSpan.textContent;
+
+        // Swap the title span for an input field
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'edit-input';
+        input.value = oldTitle;
+
+        // Swap Edit/Delete buttons for Save/Cancel buttons
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'edit-btn';
+        saveBtn.textContent = 'Save';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'delete-btn';
+        cancelBtn.textContent = 'Cancel';
+
+        const restore = () => {
+            input.replaceWith(titleSpan);
+            actionsDiv.replaceChildren(editBtn, deleteBtn);
+            if (!li.contains(label)) {
+                li.prepend(label);
             }
-        }
+        };
 
-        async function toggleTask(id, currentStatus) {
-            const newStatus = currentStatus === 'Completed' ? 'Pending' : 'Completed';
+        const saveEdit = async () => {
+            const newTitle = input.value.trim();
+            if (!newTitle || newTitle === oldTitle) {
+                restore();
+                return;
+            }
+
             try {
                 const res = await fetch(`${API_URL}/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: newStatus })
+                    body: JSON.stringify({ title: newTitle })
                 });
 
                 if (res.ok) {
                     fetchTasks();
                 } else {
                     const errData = await res.json();
-                    console.error('Update rejected:', errData);
+                    console.error('Edit rejected:', errData);
+                    alert('Failed to update task');
                 }
             } catch (err) {
-                console.error('Failed to update task:', err);
+                console.error('Failed to edit task:', err);
+                alert('Failed to update task');
             }
-        }
+        };
 
-        async function deleteTask(id) {
-            try {
-                await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+        saveBtn.onclick = saveEdit;
+        cancelBtn.onclick = restore;
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') saveEdit();
+            if (e.key === 'Escape') restore();
+        };
+
+        titleSpan.replaceWith(input);
+        actionsDiv.replaceChildren(saveBtn, cancelBtn);
+        input.focus();
+    }
+
+    function applyCurrentFilter() {
+        if (currentFilter === 'active') {
+            renderTasks(allTasks.filter(t => t.status !== 'Completed'));
+        } else if (currentFilter === 'completed') {
+            renderTasks(allTasks.filter(t => t.status === 'Completed'));
+        } else {
+            renderTasks(allTasks);
+        }
+    }
+
+    function filterTasks(filter) {
+        currentFilter = filter;
+
+        // Highlight the active filter button
+        document.querySelectorAll('.filters button').forEach(btn => btn.classList.remove('active-filter'));
+        document.getElementById(`btn-${filter}`).classList.add('active-filter');
+
+        applyCurrentFilter();
+    }
+
+    async function addTask() {
+        const input = document.getElementById('taskTitle');
+        const title = input.value.trim();
+        if (!title) return;
+
+        try {
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title })
+            });
+
+            if (!res.ok) {
+                console.error('Failed to add task, status:', res.status);
+                alert('Could not save task to server.');
+                return;
+            }
+
+            input.value = '';
+            fetchTasks();
+        } catch (err) {
+            console.error('Failed to add task:', err);
+        }
+    }
+
+    async function toggleTask(id, currentStatus) {
+        const newStatus = currentStatus === 'Completed' ? 'Pending' : 'Completed';
+        try {
+            const res = await fetch(`${API_URL}/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+
+            if (res.ok) {
                 fetchTasks();
-            } catch (err) {
-                console.error('Failed to delete task:', err);
+            } else {
+                const errData = await res.json();
+                console.error('Update rejected:', errData);
             }
+        } catch (err) {
+            console.error('Failed to update task:', err);
         }
+    }
 
-        window.onload = fetchTasks;
-    </script>
+    async function deleteTask(id) {
+        try {
+            await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+            fetchTasks();
+        } catch (err) {
+            console.error('Failed to delete task:', err);
+        }
+    }
+
+    window.onload = fetchTasks;
+</script>
 </body>
 </html>

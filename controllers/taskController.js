@@ -1,64 +1,32 @@
-const db = require('../config/db');
+async function updateTask(req, res) {
+  const { id } = req.params;
+  const { title, completed } = req.body;
 
-// GET /api/tasks - Retrieve all tasks
-const getAllTasks = async (req, res) => {
+  // Keep both `completed` (0/1) and `status` ('Pending'/'Completed') aligned
+  const completedVal = completed !== undefined ? (completed ? 1 : 0) : null;
+  const statusVal = completed !== undefined ? (completed ? "Completed" : "Pending") : null;
+
   try {
-    const [results] = await db.query('SELECT * FROM tasks');
-    res.json(results);
-  } catch (err) {
-    console.error('Database Error:', err);
-    res.status(500).json({ error: err.message });
-  }
-};
+    const [result] = await db.query(
+      `UPDATE tasks 
+       SET title = COALESCE(?, title), 
+           completed = COALESCE(?, completed), 
+           status = COALESCE(?, status) 
+       WHERE id = ?`,
+      [title ?? null, completedVal, statusVal, id]
+    );
 
-// POST /api/tasks - Create a new task
-const createTask = async (req, res) => {
-  try {
-    const { title } = req.body;
-    if (!title || !title.trim()) {
-      return res.status(400).json({ error: 'Task title is required' });
-    }
-    const [result] = await db.query('INSERT INTO tasks (title) VALUES (?)', [title]);
-    res.json({ id: result.insertId, title, completed: false });
-  } catch (err) {
-    console.error('Database Error:', err);
-    res.status(500).json({ error: err.message });
-  }
-};
-
-// PUT /api/tasks/:id - Update task status
-const updateTask = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    const allowedStatus = ['Pending', 'In Progress', 'Completed'];
-    if (!allowedStatus.includes(status)) {
-      return res.status(400).json({ error: 'Invalid task status' });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Task not found" });
     }
 
-    await db.query('UPDATE tasks SET status = ? WHERE id = ?', [status, id]);
-    res.json({ message: 'Task status updated successfully' });
+    res.json({
+      id: Number(id),
+      ...(title !== undefined && { title }),
+      ...(completed !== undefined && { completed: completedVal, status: statusVal }),
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error updating task:", err);
+    res.status(500).json({ message: "Failed to update task" });
   }
-};
-
-// DELETE /api/tasks/:id - Remove a task
-const deleteTask = async (req, res) => {
-  try {
-    const { id } = req.params;
-    await db.query('DELETE FROM tasks WHERE id = ?', [id]);
-    res.json({ message: 'Task deleted successfully' });
-  } catch (err) {
-    console.error('Database Error:', err);
-    res.status(500).json({ error: err.message });
-  }
-};
-
-module.exports = {
-  getAllTasks,
-  createTask,
-  updateTask,
-  deleteTask
-};
+}
