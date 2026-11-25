@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const {
-  getTasks, // change to getAllTasks to match taskController.js
+  getTasks,
   createTask,
   updateTask,
   deleteTask,
